@@ -1048,7 +1048,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--chat-id",
         required=True,
-        help="自定义聊天 ID，例如 chat_xiaoguang",
+        help="自定义聊天 ID，例如 chat_xiaoming",
     )
     parser.add_argument(
         "--my-sender",

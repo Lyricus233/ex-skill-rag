@@ -145,6 +145,9 @@ python3 ${CLAUDE_SKILL_DIR}/tools/search_milvus.py \
       把你记得的事情告诉我
       比如：ta的口头禅、吵架模式、约会常去的地方
 
+  [F] 我已自行处理好数据
+      已有标准的 chunks.jsonl 供入库，或者已经将数据导入 Milvus 中
+
 可以混用，也可以跳过（仅凭手动信息生成）。
 ```
 
@@ -257,6 +260,21 @@ python3 ${CLAUDE_SKILL_DIR}/tools/photo_analyzer.py \
   ta最让你心动的瞬间？
   你们是怎么分开的？
 ```
+
+---
+
+#### 方式 F：已自行处理好数据（已有 chunks 或已完成入库）
+
+如果你已经自己提前跑过了切片，或者用其它工具导出了标准的 `chunks.jsonl`，不再需要繁琐的提取：
+
+```bash
+# 直接执行 Milvus 导入即可（根据需要携带 --source 等）
+python3 ${CLAUDE_SKILL_DIR}/tools/ingest_milvus.py \
+  --input {path_to_your_chunks.jsonl} \
+  --collection "ex_{slug}_memories" \
+  --source {your_data_source}
+```
+*如果用户甚至已经自己入库完全结束，则可跳过该步骤，直接执行 Step 3 基于已有数据库信息开始分析生成 Persona/Memory）。*
 
 ---
 

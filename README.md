@@ -2,8 +2,6 @@
 
 > 本项目基于 [therealXiaomanChu/ex-skill](https://github.com/therealXiaomanChu/ex-skill) 开发，扩展了 RAG 检索增强能力，深度挖掘每段经历的价值。
 
-**我会为了你一万次回到那个夏天。**
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.9+](https://img.shields.io/badge/Python-3.9%2B-blue.svg)](https://python.org)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-blueviolet)](https://claude.ai/code)
@@ -23,7 +21,7 @@
 
 ## 安装
 
-### Claude Code
+### 1. Claude Code
 
 > **重要**：Claude Code 从 **git 仓库根目录** 的 `.claude/skills/` 查找 skill。请在正确的位置执行。
 
@@ -36,23 +34,96 @@ git clone https://github.com/Lyricus233/ex-skill-rag .claude/skills/create-ex
 git clone https://github.com/Lyricus233/ex-skill-rag ~/.claude/skills/create-ex
 ```
 
-### 依赖（可选）
+### 2. 依赖
+
+运行以下命令安装项目依赖：
 
 ```bash
 pip3 install -r requirements.txt
 ```
+
+### 3. 安装 & 启动 Milvus
+
+我们使用 Milvus 数据库来存储和检索聊天记录的向量数据。
+
+如果你已经安装了 Docker，可以直接使用以下命令启动 Milvus：
+
+```bash
+docker pull milvusdb/milvus:latest
+docker run -d --name milvus_cpu -p 19530:19530 -p 19121:19121 milvusdb/milvus:latest
+```
+
+Milvus 也提供了 Docker Compose 配置文件。要使用 Docker Compose 安装 Milvus，在[这里](https://github.com/milvus-io/milvus/releases)下载配置文件，使用以下命令：
+
+```bash
+docker compose -f ./milvus-standalone-docker-compose.yml up -d
+```
+
+启动成功后，Milvus 容器默认使用本地 19530 端口提供服务，访问 `http://127.0.0.1:9091/webui/` 查看容器状态。
+
+### 4. 配置环境变量
+
+参照本项目 `.env.example` 文件配置环境变量。请确保配置了以下环境变量，用于连接 Milvus 和 OpenAI：
+
+```
+MILVUS_URI="tcp://localhost:19530"
+MILVUS_COLLECTION="chat_chunks"
+MILVUS_TOKEN="your_milvus_token"
+OPENAI_API_KEY="your_openai_api_key"
+```
+
+你可以在 .env 文件中设置这些环境变量，也可以直接在命令行中设置。
+
+### 5. 启动项目
+
+确保你已完成 Milvus 和依赖的安装，运行以下命令预处理聊天记录并将数据导入 Milvus：
+
+```bash
+python3 tools/wechat_parser.py --input <input_path> --output-dir <output_path> --chat-id chat_xiaoming
+python3 tools/ingest_milvus.py --input <output_path>/chunks.jsonl
+```
+
+**（可选）使用腾讯云 ASR 转写语音聊天记录：**
+
+配置以下环境变量：
+
+```
+TENCENTCLOUD_SECRET_ID=<your_secret_id>
+TENCENTCLOUD_SECRET_KEY=<your_secret_key>
+TENCENTCLOUD_REGION=<region>
+TENCENT_ASR_ENGINE=16k_zh
+```
+
+运行以下命令将语音转写为文字：
+
+```bash
+python3 tools/retranscribe_tencent_asr.py --input <input_path> --voice-dir <voices_path> --output <output_path>
+```
+
+可用 `--limit` 参数进行小范围测试。`--voice-dir` 为语音文件存放目录。
+
+### 6. 运行检索
+
+使用以下命令检索数据：
+
+```bash
+python tools/search_milvus.py --query <text> --top-k 5 --json
+```
+
+确保 Milvus 正常运行，返回检索结果。
 
 ---
  
 ## 环境要求
  
 - **Claude Code**：免费安装，需要 Node.js 18+（[安装指南](https://docs.anthropic.com/en/docs/claude-code)）
+- **Milvus 向量数据库**：本项目依赖 Milvus 数据库来增强回忆检索能力，上文提供安装指南供参考。
 - **API 消耗**：创建一个前任 Skill 大约消耗 5k-15k tokens，取决于聊天记录量
 - **付费方式**（二选一）：
   - Claude Pro / Max 订阅：在订阅额度内使用，无需额外配置
   - Anthropic API Key：按量付费，需在 Claude Code 中配置 key
 - **替代前端**：也可以使用 [OpenClaw](https://github.com/nicepkg/openclaw) 运行本 Skill
-- **不需要 GPU**，不需要本地模型，不需要 Docker
+- **不需要 GPU**，不需要本地语言模型。
  
 ---
 
@@ -187,31 +258,7 @@ python3 tools/search_milvus.py --query <text> --source qq --top-k <count>
 
 ## 项目结构
 
-本项目遵循 [AgentSkills](https://agentskills.io) 开放标准：
-
-```
-create-ex/
-├── SKILL.md                # skill 入口（官方 frontmatter）
-├── prompts/                # Prompt 模板
-│   ├── intake.md           #   对话式信息录入
-│   ├── memory_analyzer.md  #   关系记忆提取
-│   ├── persona_analyzer.md #   性格行为提取（含标签翻译表）
-│   ├── memory_builder.md   #   memory.md 生成模板
-│   ├── persona_builder.md  #   persona.md 五层结构模板
-│   ├── merger.md           #   增量 merge 逻辑
-│   └── correction_handler.md # 对话纠正处理
-├── tools/                  # Python 工具
-│   ├── wechat_parser.py    # 微信聊天记录解析
-│   ├── qq_parser.py        # QQ 聊天记录解析
-│   ├── social_parser.py    # 社交媒体内容解析
-│   ├── photo_analyzer.py   # 照片元信息分析
-│   ├── skill_writer.py     # Skill 文件管理
-│   └── version_manager.py  # 版本存档与回滚
-├── exes/                   # 生成的前任 Skill（gitignored）
-├── docs/PRD.md
-├── requirements.txt
-└── LICENSE
-```
+本项目遵循 [AgentSkills](https://agentskills.io) 开放标准。
 
 ---
 
@@ -222,7 +269,6 @@ create-ex/
 * 本项目不鼓励对前任的不健康执念，如果你发现自己过于沉浸，请寻求专业帮助
 * 你的前任是一个真实的人，ta有自己的人生。这个 Skill 只是你记忆中的ta
 
-
 ---
 
 ## 社区生态
@@ -231,6 +277,7 @@ create-ex/
 
 
 ### 写在最后
+
 人的记忆是一种不讲道理的存储介质。
 你记不住高数公式，记不住车牌号，记不住今天是几号，但你清楚记得四年前的一个下午ta穿了一件白T恤站在便利店门口等你，手里拿着两根冰棍，一根给你，一根ta自己。
 这不公平。
