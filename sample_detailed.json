@@ -1,0 +1,60 @@
+[
+    {
+        "localId": 27841,
+        "createTime": 1746424217,
+        "formattedTime": "2025-05-05 13:50:17",
+        "type": "文本消息",
+        "localType": 1,
+        "content": "谢谢你",
+        "isSend": 1,
+        "senderUsername": "wxid_ubm3tao58e2822",
+        "senderDisplayName": "tsuki",
+        "source": "",
+        "senderAvatarKey": "wxid_ubm3tao58e2822",
+        "platformMessageId": "8035872727560030504"
+    },
+    {
+        "localId": 647,
+        "createTime": 1712928557,
+        "formattedTime": "2024-04-12 21:29:17",
+        "type": "语音消息",
+        "localType": 34,
+        "content": "[语音消息 - 转文字失败: 未知错误]",
+        "isSend": 0,
+        "senderUsername": "wxid_95o9g5toio9u22",
+        "senderDisplayName": "xiaoming",
+        "source": "",
+        "senderAvatarKey": "wxid_95o9g5toio9u22",
+        "platformMessageId": "7171177342776556006"
+    },
+    {
+        "localId": 22123,
+        "createTime": 1746262227,
+        "formattedTime": "2025-05-03 16:50:27",
+        "type": "语音消息",
+        "localType": 34,
+        "content": "[语音转文字] 你也是。",
+        "isSend": 0,
+        "senderUsername": "wxid_95o9g5toio9u22",
+        "senderDisplayName": "xiaoming",
+        "source": "",
+        "senderAvatarKey": "wxid_95o9g5toio9u22",
+        "platformMessageId": "2507942823300025027"
+    },
+    {
+        "localId": 90,
+        "createTime": 1746257545,
+        "formattedTime": "2025-05-03 15:32:25",
+        "type": "动画表情",
+        "localType": 47,
+        "content": "[表情包]",
+        "isSend": 1,
+        "senderUsername": "wxid_ubm3tao58e2822",
+        "senderDisplayName": "tsuki",
+        "source": "",
+        "senderAvatarKey": "wxid_ubm3tao58e2822",
+        "emojiMd5": "ae07ac1bfc9daf0477968d83b88c575b",
+        "emojiCdnUrl": "http://example.com/emoji",
+        "platformMessageId": "3431157249989181641"
+    }
+]

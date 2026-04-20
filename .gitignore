@@ -12,6 +12,8 @@ __pycache__/
 knowledge/
 *.db
 *.sqlite
+data/
+out/
 
 # IDE
 .vscode/
@@ -19,4 +21,5 @@ knowledge/
 
 # 环境
 .env
+.env.local
 venv/
