@@ -7,9 +7,13 @@
 - 聊天记录由用户自行导出，项目不提供任何远程数据抓取能力
 - 导出的聊天记录由 Claude Code 在本地解析，不经过任何第三方服务器
 - 生成的前任 Skill 文件（persona.md、memory.md）保存在用户本地的 `exes/` 目录，已被 `.gitignore` 排除，不会被提交到 Git 仓库
-- 项目本身不包含任何数据上传、远程存储或遥测功能
+- 为支持长期记忆，项目将部分聊天记录切片（Chunks）后存储在用户自行部署的 **Milvus 向量数据库**中（通常在其本地 Docker 容器中运行），不上传至任何中心化云端数据库。
+- 项目本身不收集任何隐私数据。
 
-唯一的网络交互是 Claude Code 与 Anthropic API 之间的对话请求，这部分受 [Anthropic 使用政策](https://www.anthropic.com/policies) 约束。
+目前主要的网络交互包括：
+1. **大语言模型 API**：Claude Code 与 Anthropic API 之间的对话请求。
+2. **向量化 API（Embedding）**：在执行入库（`ingest_milvus.py`）时，会将聊天切片发送至 Embedding 模型服务商（如 OpenAI 的 `text-embedding-3-large`）以获取向量。
+以上数据请求均受对应模型服务商的使用政策及隐私协议约束。
 
 ## 合法性边界
 
