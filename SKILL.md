@@ -38,6 +38,8 @@ allowed-tools: Read, Write, Edit, Bash
 
 本 Skill 运行在 Claude Code 环境，使用以下工具：
 
+### 数据收集工具
+
 | 任务 | 使用工具 |
 |------|----------|
 | 读取 PDF/图片 | `Read` 工具 |
@@ -46,11 +48,47 @@ allowed-tools: Read, Write, Edit, Bash
 | 解析 QQ 聊天记录导出 | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/qq_parser.py` |
 | 解析社交媒体内容 | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/social_parser.py` |
 | 分析照片元信息 | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/photo_analyzer.py` |
+
+
+### 数据处理工具
+
+| 任务 | 使用工具 |
+|------|----------|
+| 向量化入库 Milvus | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/ingest_milvus.py` |
+| 语义检索 Milvus | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/search_milvus.py` |
 | 写入/更新 Skill 文件 | `Write` / `Edit` 工具 |
-| 版本管理 | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/version_manager.py` |
+| QQ/其他文本转标准 chunks | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/build_chunks_generic.py` |
+| 语音转文字（腾讯 ASR）| `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/retranscribe_tencent_asr.py` |
+
+
+### 其他工具
+
+| 任务 | 使用工具 |
+|------|----------|
 | 列出已有 Skill | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/skill_writer.py --action list` |
+| 版本管理 | `Bash` → `python3 ${CLAUDE_SKILL_DIR}/tools/version_manager.py` |
 
 **基础目录**：Skill 文件写入 `./exes/{slug}/`（相对于本项目目录）。
+
+---
+
+## RAG 检索执行规则
+
+1. 只要涉及“回忆细节、时间线、语气风格、历史事实”，**必须先检索 Milvus**，再组织回答。
+2. 不允许只凭模型记忆直接回答历史细节；应先执行（`collection_name` 参考对应的 `meta.json`，通常为 `ex_{slug}_memories`）：
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/tools/search_milvus.py \
+  --query "{user_query}" \
+  --collection "ex_{slug}_memories" \
+  --source "{source}" \
+  --chat-id "{chat_id}" \
+  --top-k {k} --json
+```
+
+3. 若检索结果为空或置信度低，必须明确告知“当前向量库未检索到足够证据”，并请求补充资料，不得编造。
+4. 默认 `top-k=5`，可根据问题复杂度提升到 `8-12`。
+5. 同一次回答中，优先引用检索命中的 `display_text` 内容再进行改写。
 
 ---
 
@@ -92,8 +130,7 @@ allowed-tools: Read, Write, Edit, Bash
 原材料怎么提供？回忆越多，还原度越高。
 
   [A] 微信聊天记录导出
-      支持多种导出工具的格式（txt/html/json）
-      推荐工具：WeChatMsg、留痕、PyWxDump
+      当前仅支持 WeFlow 导出的 JSON / JSONL
 
   [B] QQ 聊天记录导出
       支持 QQ 导出的 txt/mht 格式
@@ -115,21 +152,30 @@ allowed-tools: Read, Write, Edit, Bash
 
 #### 方式 A：微信聊天记录
 
-支持多种格式的聊天记录文件：
+默认情况下支持 WeFlow JSON / JSONL：
 
-```
+> **可选前置步骤：语音转文字**
+> 若有语音消息需要识别，使用腾讯 ASR 工具预处理原文件：
+> ```bash
+> python3 ${CLAUDE_SKILL_DIR}/tools/retranscribe_tencent_asr.py \
+>   --input {weflow_json_or_jsonl} \
+>   --voice-dir {voice_file_dir} \
+>   --output {weflow_json_or_jsonl_updated} \
+>   --only-failed
+> ```
+> 处理完成后，再运行后续的聊天记录解析。
+
+```bash
 python3 ${CLAUDE_SKILL_DIR}/tools/wechat_parser.py \
-  --file {path} \
-  --target "{name}" \
-  --output /tmp/wechat_out.txt \
-  --format auto
+  --input {weflow_json_or_jsonl} \
+  --output-dir /tmp/wechat_out \
+  --chat-id "{chat_id}" \
+  --input-format auto
 ```
 
 支持的输入格式：
-* **txt / csv**：最通用，多数导出工具默认格式
-* **html**：带样式的聊天记录页面
-* **json**：结构化数据
-* **纯文本粘贴**：直接从聊天窗口复制的内容
+* **json**：WeFlow 导出的 JSON
+* **jsonl**：WeFlow 导出的 JSONL
 
 > 微信聊天记录的获取方式详见 [导入指南](create-ex/docs/EXPORT_GUIDE.md)
 
@@ -150,6 +196,13 @@ python3 ${CLAUDE_SKILL_DIR}/tools/qq_parser.py \
   --file {path} \
   --target "{name}" \
   --output /tmp/qq_out.txt
+
+# 若需要 Milvus 入库/查询，请转成标准 chunks.jsonl
+python3 ${CLAUDE_SKILL_DIR}/tools/build_chunks_generic.py \
+  --input {input_path} \
+  --output /tmp/qq_chunks.jsonl \
+  --source qq \
+  --chat-id "{chat_id}"
 ```
 
 支持 txt 和 mht 格式。可以通过手机 QQ 的「合并转发」发到电脑端后复制保存。
@@ -208,6 +261,79 @@ python3 ${CLAUDE_SKILL_DIR}/tools/photo_analyzer.py \
 ---
 
 如果用户说"没有文件"或"跳过"，仅凭 Step 1 的手动信息生成 Skill。
+
+### Step 2.5：Milvus 入库前确认
+
+在执行任何入库命令前，必须向用户确认以下参数：
+
+1. `collection_name`：目标集合名（**直接帮用户决定**：使用 `ex_{slug}_memories`，如 `ex_xiaoming_memories`，避免用户麻烦）
+2. `drop_collection`：若集合已存在是否覆盖（`是/否`，若是同一前任初期重导可覆盖，如果是追加**必须否**）
+3. `source`：数据来源标识（`wechat_weflow / qq / other`）
+4. `embedding_model`：向量模型（默认 `text-embedding-3-large`）
+5. `batch_size`：每批处理数量（默认 `100`）
+6. `limit`：是否仅导入前 N 条做测试（可空）
+7. `chat_id`：检索时是否限定单会话（可空）
+
+确认模板：
+
+```
+准备入库前请确认：
+- 集合名：{已自动生成，如 ex_xiaoming_memories}
+- 已存在是否覆盖：{是/否}
+- 数据来源 source：{wechat_weflow/qq/other}
+- Embedding 模型：{model}
+- batch_size：{batch_size}
+- limit：{limit 或 不限制}
+- 检索是否限制 chat_id：{chat_id 或 不限制}
+
+回复“确认”后开始入库。
+```
+
+#### 入库执行命令（按来源）
+
+**A. 微信 WeFlow（可直接入库）**
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/tools/ingest_milvus.py \
+  --input /tmp/wechat_out/chunks.jsonl \
+  --collection "{collection_name}" \
+  --source wechat_weflow \
+  --embedding-model "{model}" \
+  --batch-size {batch_size} \
+  {--limit N 可选} \
+  {--drop-collection 可选}
+```
+
+**B. QQ / 其他（先转 chunks，再入库）**
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/tools/build_chunks_generic.py \
+  --input {input_path} \
+  --output /tmp/generic_chunks.jsonl \
+  --source {qq_or_other} \
+  --chat-id "{chat_id}"
+
+python3 ${CLAUDE_SKILL_DIR}/tools/ingest_milvus.py \
+  --input /tmp/generic_chunks.jsonl \
+  --collection "{collection_name}" \
+  --source {qq_or_other} \
+  --embedding-model "{model}" \
+  --batch-size {batch_size} \
+  {--limit N 可选} \
+  {--drop-collection 可选}
+```
+
+入库完成后，需执行一次检索验证：
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/tools/search_milvus.py \
+  --query "{验证问题}" \
+  --collection "{collection_name}" \
+  --source "{source}" \
+  {--chat-id "{chat_id}" 可选} \
+  --top-k 5 --json
+```
+
 ### Step 3：分析原材料
 
 将收集到的所有原材料和用户填写的基础信息汇总，按以下两条线分析：
@@ -276,6 +402,7 @@ mkdir -p exes/{slug}/memories/social
 {
   "name": "{name}",
   "slug": "{slug}",
+  "collection_name": "ex_{slug}_memories",
   "created_at": "{ISO时间}",
   "updated_at": "{ISO时间}",
   "version": "v1",
@@ -361,17 +488,29 @@ user-invocable: true
 
 用户提供新的聊天记录、照片或回忆时：
 
-1. 按 Step 2 的方式读取新内容
-2. 用 `Read` 读取现有 `exes/{slug}/memory.md` 和 `persona.md`
-3. 参考 `${CLAUDE_SKILL_DIR}/prompts/merger.md` 分析增量内容
-4. 存档当前版本（用 Bash）：
+1. **追加 RAG 向量库（重要）**：
+   - 使用 `ingest_milvus.py` 命令，并且**绝对不要加** `--drop-collection` 参数。
+   - 解析新提供的聊天记录（转为 `chunks.jsonl`）。
+   - 将新数据追加写入原有的 collection：
+     ```bash
+     python3 ${CLAUDE_SKILL_DIR}/tools/ingest_milvus.py \
+       --input /tmp/new_chunks.jsonl \
+       --collection "{collection_name}" \
+       --source {source} \
+       --embedding-model "{model}"
+     ```
+     （注意：不要加 `--drop-collection` 参数，否则会清空历史数据）
+2. 按 Step 2 的方式读取新内容
+3. 用 `Read` 读取现有 `exes/{slug}/memory.md` 和 `persona.md`
+4. 参考 `${CLAUDE_SKILL_DIR}/prompts/merger.md` 分析增量内容，合并时**务必先通过 `search_milvus.py` 检索**相关历史事实，以确保增量整合的一致性。
+5. 存档当前版本（用 Bash）：
 
    ```bash
    python3 ${CLAUDE_SKILL_DIR}/tools/version_manager.py --action backup --slug {slug} --base-dir ./exes
    ```
-5. 用 `Edit` 工具追加增量内容到对应文件
-6. 重新生成 `SKILL.md`（合并最新 memory.md + persona.md）
-7. 更新 `meta.json` 的 version 和 updated_at
+6. 用 `Edit` 工具追加增量内容到对应文件
+7. 重新生成 `SKILL.md`（合并最新 memory.md + persona.md）
+8. 更新 `meta.json` 的 version 和 updated_at
 
 ---
 
@@ -464,7 +603,7 @@ List all generated exes when the user says `/list-exes`.
 ### Step 2: Source Material Import
 
 Options:
-* **[A] WeChat Export** — txt/html/json from WeChatMsg, PyWxDump, etc.
+* **[A] WeChat Export** — WeFlow JSON/JSONL only.
 * **[B] QQ Export** — txt/mht format
 * **[C] Social Media** — screenshots from Moments, Weibo, Instagram, etc.
 * **[D] Upload Files** — photos (EXIF extraction), PDFs, text files

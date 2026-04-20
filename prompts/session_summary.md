@@ -37,6 +37,7 @@
 ```
 exes/{slug}/sessions/{YYYYMMDD_HHMMSS}.md
 ```
+*如果在对话中产生了非常有价值的"新共创内容"，也可推荐把它转为 chunk 通过 `ingest_milvus.py` 补充追加入库（可选高级操作）。*
 
 ## 加载规则（供 merger.md 使用）
 

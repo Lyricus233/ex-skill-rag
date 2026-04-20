@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""微信语音聊天记录识别工具
+"""微信语音聊天记录识别工具 - Tencent ASR
 
 Usage:
     python3 retranscribe_tencent_asr.py \

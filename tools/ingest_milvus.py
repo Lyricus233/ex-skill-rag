@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""聊天记录写入 Milvus 数据库
+"""聊天记录向量化并写入 Milvus 数据库
 
 Usage:
     python3 ingest_milvus.py \
         --input <chunks_jsonl_path> \
         [--collection <name>] \
+        [--source <wechat_weflow/qq/other>] \
         [--milvus-uri <uri>] \
         [--milvus-token <token>] \
         [--embedding-model <model>] \
@@ -26,6 +27,9 @@ from dotenv import load_dotenv
 from tqdm import tqdm
 from openai import OpenAI
 from pymilvus import MilvusClient, DataType
+
+
+DEFAULT_SOURCE = "wechat_weflow"
 
 
 def load_jsonl(path: str) -> Iterable[Dict[str, Any]]:
@@ -50,6 +54,98 @@ def sanitize_text(text: Optional[str]) -> str:
         return "[EMPTY]"
     text = str(text).strip()
     return text if text else "[EMPTY]"
+
+
+def safe_int(v: Any, default: int = 0) -> int:
+    try:
+        return int(v)
+    except Exception:
+        return default
+
+
+def safe_bool(v: Any, default: bool = False) -> bool:
+    if isinstance(v, bool):
+        return v
+    if v is None:
+        return default
+    if isinstance(v, (int, float)):
+        return bool(v)
+    s = str(v).strip().lower()
+    if s in {"1", "true", "yes", "y", "on"}:
+        return True
+    if s in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+def normalize_chunk(
+    raw_chunk: Dict[str, Any],
+    row_idx: int,
+    source_override: Optional[str],
+) -> Dict[str, Any]:
+    source = (
+        str(source_override).strip()
+        if source_override
+        else str(raw_chunk.get("source", "")).strip() or DEFAULT_SOURCE
+    )
+
+    chunk_id = (
+        raw_chunk.get("chunk_id")
+        or raw_chunk.get("id")
+        or raw_chunk.get("uuid")
+        or f"{source}_{row_idx:08d}"
+    )
+
+    chat_id = (
+        raw_chunk.get("chat_id")
+        or raw_chunk.get("conversation_id")
+        or raw_chunk.get("target_name")
+        or "unknown_chat"
+    )
+
+    timestamp = safe_int(raw_chunk.get("timestamp", raw_chunk.get("ts", 0)), 0)
+    start_ts = safe_int(raw_chunk.get("start_ts", timestamp), timestamp)
+    end_ts = safe_int(raw_chunk.get("end_ts", start_ts), start_ts)
+
+    text_for_embedding = sanitize_text(
+        raw_chunk.get("text_for_embedding")
+        or raw_chunk.get("content_for_embedding")
+        or raw_chunk.get("text")
+        or raw_chunk.get("content")
+        or raw_chunk.get("raw_text")
+        or raw_chunk.get("display_text")
+        or ""
+    )
+    display_text = sanitize_text(
+        raw_chunk.get("display_text")
+        or raw_chunk.get("text")
+        or raw_chunk.get("content")
+        or text_for_embedding
+    )
+
+    turn_count = safe_int(raw_chunk.get("turn_count", 1), 1)
+    message_count = safe_int(raw_chunk.get("message_count", turn_count), turn_count)
+
+    return {
+        "chunk_id": str(chunk_id),
+        "source": source,
+        "chat_id": str(chat_id),
+        "session_id": str(raw_chunk.get("session_id", chat_id)),
+        "start_ts": start_ts,
+        "end_ts": end_ts,
+        "dominant_speaker": str(
+            raw_chunk.get("dominant_speaker", raw_chunk.get("sender", "unknown"))
+        ),
+        "turn_count": turn_count,
+        "message_count": message_count,
+        "has_image": safe_bool(raw_chunk.get("has_image", False), False),
+        "has_video": safe_bool(raw_chunk.get("has_video", False), False),
+        "has_sticker": safe_bool(raw_chunk.get("has_sticker", False), False),
+        "has_voice": safe_bool(raw_chunk.get("has_voice", False), False),
+        "has_voice_asr": safe_bool(raw_chunk.get("has_voice_asr", False), False),
+        "text_for_embedding": text_for_embedding,
+        "display_text": display_text,
+    }
 
 
 def build_openai_client() -> OpenAI:
@@ -105,6 +201,7 @@ def ensure_collection(
     schema.add_field(
         field_name="id", datatype=DataType.VARCHAR, is_primary=True, max_length=128
     )
+    schema.add_field(field_name="source", datatype=DataType.VARCHAR, max_length=32)
     schema.add_field(field_name="chat_id", datatype=DataType.VARCHAR, max_length=128)
     schema.add_field(field_name="session_id", datatype=DataType.VARCHAR, max_length=128)
     schema.add_field(field_name="start_ts", datatype=DataType.INT64)
@@ -146,6 +243,7 @@ def ensure_collection(
 def chunk_to_row(chunk: Dict[str, Any], vector: List[float]) -> Dict[str, Any]:
     return {
         "id": str(chunk["chunk_id"]),
+        "source": str(chunk.get("source", DEFAULT_SOURCE)),
         "chat_id": str(chunk.get("chat_id", "")),
         "session_id": str(chunk.get("session_id", "")),
         "start_ts": int(chunk.get("start_ts", 0)),
@@ -175,6 +273,11 @@ def parse_args() -> argparse.Namespace:
         "--collection",
         default=None,
         help="Milvus 集合名；默认读取 .env 的 MILVUS_COLLECTION",
+    )
+    parser.add_argument(
+        "--source",
+        default=None,
+        help="覆盖输入记录中的 source（示例：wechat_weflow / qq / other）",
     )
     parser.add_argument(
         "--milvus-uri",
@@ -217,7 +320,7 @@ def main() -> None:
 
     input_path = args.input
     if not os.path.exists(input_path):
-        raise FileNotFoundError(f"Input file not found: {input_path}")
+        raise FileNotFoundError(f"输入文件不存在：{input_path}")
 
     embedding_model = (
         args.embedding_model
@@ -227,16 +330,14 @@ def main() -> None:
 
     milvus_uri = args.milvus_uri or os.getenv("MILVUS_URI", "").strip()
     if not milvus_uri:
-        raise RuntimeError("MILVUS_URI is required in .env or via --milvus-uri")
+        raise RuntimeError("请在 .env 或参数中提供 MILVUS_URI")
 
     milvus_token = args.milvus_token
     if milvus_token is None:
         milvus_token = os.getenv("MILVUS_TOKEN", "").strip() or None
 
     collection_name = (
-        args.collection
-        or os.getenv("MILVUS_COLLECTION", "").strip()
-        or "wechat_chat_chunks"
+        args.collection or os.getenv("MILVUS_COLLECTION", "").strip() or "chat_chunks"
     )
 
     batch_size = args.batch_size
@@ -246,18 +347,25 @@ def main() -> None:
     openai_client = build_openai_client()
     milvus_client = build_milvus_client(uri=milvus_uri, token=milvus_token)
 
-    chunks = list(load_jsonl(input_path))
+    raw_chunks = list(load_jsonl(input_path))
     if args.limit is not None:
-        chunks = chunks[: args.limit]
+        raw_chunks = raw_chunks[: args.limit]
+
+    chunks = [
+        normalize_chunk(raw_chunk, idx, args.source)
+        for idx, raw_chunk in enumerate(raw_chunks, start=1)
+    ]
 
     if not chunks:
-        raise RuntimeError("No chunk records found in input file.")
+        raise RuntimeError("输入文件中未找到可入库的记录")
 
     print(f"[INFO] Loaded {len(chunks)} chunks from {input_path}")
     print(f"[INFO] Embedding model: {embedding_model}")
     print(f"[INFO] Milvus URI: {milvus_uri}")
     print(f"[INFO] Collection: {collection_name}")
     print(f"[INFO] Batch size: {batch_size}")
+    if args.source:
+        print(f"[INFO] source 覆盖：{args.source}")
 
     vector_dim = infer_vector_dim(openai_client, embedding_model)
     print(f"[INFO] Inferred vector dimension: {vector_dim}")
@@ -284,7 +392,7 @@ def main() -> None:
         )
         inserted += len(rows)
 
-    print(f"[OK] Inserted {inserted} rows into Milvus collection: {collection_name}")
+    print(f"[OK] 已写入 {inserted} 条到 Milvus 集合：{collection_name}")
 
 
 if __name__ == "__main__":

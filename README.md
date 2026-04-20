@@ -1,6 +1,6 @@
 # 前任.skill
 
-> *"你们搞大模型的简直是码神，你们解放了前端兄弟，还要解放后端兄弟，测试兄弟，运维兄弟，解放网安兄弟，解放ic兄弟，最后解放自己解放全人类"*
+> 本项目基于 [therealXiaomanChu/ex-skill](https://github.com/therealXiaomanChu/ex-skill) 开发，扩展了 RAG 检索增强能力，深度挖掘每段经历的价值。
 
 **我会为了你一万次回到那个夏天。**
 
@@ -11,7 +11,7 @@
 
 &nbsp;
 
-提供前任的原材料（微信聊天记录、QQ消息、朋友圈截图、照片）加上你的主观描述  
+提供前任的原材料（微信聊天记录、QQ消息、朋友圈截图、照片）加上你的主观描述 
 生成一个**真正像ta的 AI Skill**  
 用ta的口头禅说话，用ta的方式回复你，记得你们一起去过的地方
 
@@ -30,10 +30,10 @@
 ```bash
 # 安装到当前项目（在 git 仓库根目录执行）
 mkdir -p .claude/skills
-git clone https://github.com/therealXiaomanChu/ex-skill .claude/skills/create-ex
+git clone https://github.com/Lyricus233/ex-skill-rag .claude/skills/create-ex
 
 # 或安装到全局（所有项目都能用）
-git clone https://github.com/therealXiaomanChu/ex-skill ~/.claude/skills/create-ex
+git clone https://github.com/Lyricus233/ex-skill-rag ~/.claude/skills/create-ex
 ```
 
 ### 依赖（可选）
@@ -134,11 +134,25 @@ pip3 install -r requirements.txt
 
 | 来源 | 格式 | 备注 |
 |------|------|------|
-| 微信聊天记录 | WeChatMsg / 留痕 / PyWxDump 导出 | 推荐，信息最丰富 |
+| 微信聊天记录 | [WeFlow](https://github.com/hicccc77/WeFlow) 导出 | 推荐，信息最丰富 |
 | QQ 聊天记录 | txt / mht 导出 | 适合学生时代的恋情 |
 | 朋友圈/微博 | 截图 | 提取公开人设 |
 | 照片 | JPEG/PNG（含 EXIF） | 提取时间线和地点 |
 | 口述/粘贴 | 纯文本 | 你的主观记忆 |
+
+### Milvus 入库与检索（微信 / QQ / 其他）
+
+```bash
+# 1) 微信 WeFlow：直接解析成 chunks.jsonl
+python3 tools/wechat_parser.py --input <weflow.jsonl> --output-dir out/wechat --chat-id <chat_id>
+
+# 2) QQ / 其他文本：先转标准 chunks.jsonl
+python3 tools/build_chunks_generic.py --input <qq_or_text_file> --output out/other/chunks.jsonl --source qq --chat-id <chat_id>
+
+# 3) 入库 + 查询
+python3 tools/ingest_milvus.py --input out/other/chunks.jsonl --source qq
+python3 tools/search_milvus.py --query <text> --source qq --top-k <count>
+```
 
 ### 生成的 Skill 结构
 
@@ -213,15 +227,7 @@ create-ex/
 
 ## 社区生态
  
-以下项目由社区贡献者独立开发，与本项目互补：
- 
-| 项目 | 作者 | 说明 |
-|------|------|------|
-| [ex-cure-skill](https://github.com/W1ndys/ex-cure-skill) | @W1ndys | 关系反思模式，从聊天记录中复盘经验教训 |
-| [同事.skill](https://github.com/titanwings/colleague-skill) | @titanwings | 本项目的灵感来源，把同事蒸馏成 AI Skill |
-| [simp-skill](https://github.com/BeamusWayne/simp-skill) | @BeamusWayne | 与其怀念前任，不如勇敢追爱 |
- 
----
+本项目基于 MIT 许可证开源。原始项目框架：[therealXiaomanChu/ex-skill](https://github.com/therealXiaomanChu/ex-skill)
 
 
 ### 写在最后
@@ -233,4 +239,4 @@ create-ex/
 是的，
 此刻，阳光在江面碎成一万个夏天，闪烁，又汇聚成一个冬天。这一切在你午睡时发生，你从未察觉。
 
-MIT License © [therealXiaomanChu](https://github.com/therealXiaomanChu)
+MIT License © [Lyricus](https://github.com/Lyricus233)
