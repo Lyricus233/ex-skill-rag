@@ -1,5 +1,7 @@
 # 前任.skill
 
+你可以做出一个无限接近她的影子，却留不住一个真正活过、爱过、离开过你的人。不是技术不够，是时间本来就不会回头。
+
 > 本项目基于 [therealXiaomanChu/ex-skill](https://github.com/therealXiaomanChu/ex-skill) 开发，扩展了 RAG 检索增强能力，深度挖掘每段经历的价值。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -113,9 +115,9 @@ python tools/search_milvus.py --query <text> --top-k 5 --json
 确保 Milvus 正常运行，返回检索结果。
 
 ---
- 
+
 ## 环境要求
- 
+
 - **Claude Code**：免费安装，需要 Node.js 18+（[安装指南](https://docs.anthropic.com/en/docs/claude-code)）
 - **Milvus 向量数据库**：本项目依赖 Milvus 数据库来增强回忆检索能力，上文提供安装指南供参考。
 - **API 消耗**：创建一个前任 Skill 大约消耗 5k-15k tokens，取决于聊天记录量
@@ -124,7 +126,7 @@ python tools/search_milvus.py --query <text> --top-k 5 --json
   - Anthropic API Key：按量付费，需在 Claude Code 中配置 key
 - **替代前端**：也可以使用 [OpenClaw](https://github.com/nicepkg/openclaw) 运行本 Skill
 - **不需要 GPU**，不需要本地语言模型。
- 
+
 ---
 
 ## 使用
@@ -272,18 +274,19 @@ python3 tools/search_milvus.py --query <text> --source qq --top-k <count>
 ---
 
 ## 社区生态
- 
+
 本项目基于 MIT 许可证开源。原始项目框架：[therealXiaomanChu/ex-skill](https://github.com/therealXiaomanChu/ex-skill)
 
 
 ### 写在最后
 
 人的记忆是一种不讲道理的存储介质。
-你记不住高数公式，记不住车牌号，记不住今天是几号，但你清楚记得四年前的一个下午ta穿了一件白T恤站在便利店门口等你，手里拿着两根冰棍，一根给你，一根ta自己。
+你记不住高数公式，记不住车牌号，记不住今天是几号，但你清楚记得四年前的一个下午ta穿了一件白T恤站在便利店门口等你，手里拿着两根冰棍，一根给你，一根给ta自己。
 这不公平。
 这个 Skill 就是把这些不公平的记忆导出来，从生物硬盘到数字硬盘完成格式转换。
-导完以后你或许会发现，ta也没那么好。ta也没那么差。ta就是那样一个人。会在吵完架两小时后问你吃了吗。会在纪念日那天忘了发消息然后第二天假装什么都没发生。
+导完以后你或许会发现，ta没那么好。ta也没那么差。ta就是那样一个人。会在吵完架两小时后问你吃了吗。会在纪念日那天忘了发消息然后第二天假装什么都没发生。
 是的，
 此刻，阳光在江面碎成一万个夏天，闪烁，又汇聚成一个冬天。这一切在你午睡时发生，你从未察觉。
+那些你以为早已模糊的过往，其实一直在时光里静静流淌，在你发呆的瞬间，在你不经意的回头里。而你很久以后，才忽然读懂，那一段时光里，所有笨拙而又真诚的模样。
 
 MIT License © [Lyricus](https://github.com/Lyricus233)
