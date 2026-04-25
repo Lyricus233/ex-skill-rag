@@ -139,18 +139,19 @@ python tools/search_milvus.py --query <text> --top-k 5 --json
 
 按提示输入前任的代号、基本信息、性格画像，然后选择数据来源。所有字段均可跳过，仅凭描述也能生成。
 
-完成后用 `/{slug}` 调用该前任 Skill，开始对话。
+生成的 Skill 写入两处：`.claude/skills/ex-{slug}/SKILL.md`（可触发）与 `exes/{slug}/`（数据快照）。重启 Claude Code 让它重新扫描 skill 目录后，用 `/ex-{slug}` 调用开始对话。
 
 ### 管理命令
 
 | 命令 | 说明 |
 |------|------|
 | `/list-exes` | 列出所有前任 Skill |
-| `/{slug}` | 调用完整 Skill（像ta一样跟你聊天） |
-| `/{slug}-memory` | 回忆模式（帮你回忆那些事） |
-| `/{slug}-persona` | 仅人物性格 |
+| `/ex-{slug}` | 调用完整 Skill（像 ta 一样跟你聊天） |
+| `/ex-{slug}-memory` | 回忆模式（帮你回忆那些事，不进入角色） |
+| `/ex-{slug}-persona` | 仅人物性格（用 ta 的语气聊天，不调用记忆） |
+| `/update-ex {slug}` | 追加原材料 / 合并纠正 / 重新生成 |
 | `/ex-rollback {slug} {version}` | 回滚到历史版本 |
-| `/delete-ex {slug}` | 删除 |
+| `/delete-ex {slug}` | 删除（同时清理 `.claude/skills/` 和 `exes/` 两处） |
 | `/let-go {slug}` | 放下 |
 
 ---
@@ -227,16 +228,25 @@ python3 tools/ingest_milvus.py --input out/other/chunks.jsonl --source qq
 python3 tools/search_milvus.py --query <text> --source qq --top-k <count>
 ```
 
-### 生成的 Skill 结构
+### 生成的 Skill 架构
 
-每个前任 Skill 由两部分组成，共同驱动输出：
+每个前任 Skill 由三层组成，职责分明：
 
-| 部分 | 内容 |
-|------|------|
-| **Part A — Relationship Memory** | 共同经历、约会地点、inside jokes、争吵模式、甜蜜瞬间、关系时间线 |
-| **Part B — Persona** | 5 层性格结构：硬规则 → 身份 → 说话风格 → 情感模式 → 关系行为 |
+| 层 | 名称 | 载体 | 职责 |
+|----|------|------|------|
+| 潜意识层 | Subconscious | Milvus 向量库 | 存储 ta 真实说过的每一条消息，按语义触发性唤醒 |
+| 记忆层 | Part A / memory.md | 聊天记录分析 | 关系时间线、常去地点、inside jokes、争吵与甜蜜的宏观记录 |
+| 人格层 | Part B / persona.md | 聊天记录 + 主观描述 | 说话风格（5 层结构）、情感模式、依恋类型、关系行为 |
 
-运行逻辑：`收到消息 → Persona 判断ta会怎么回 → Memory 补充共同记忆 → 用ta的方式输出`
+三层并非平行。当它们不一致时，按 **潜意识 > 记忆 > 人格** 取信——原话永远比描述可靠。
+
+运行逻辑：`收到消息 → 潜意识层取证（search_milvus --dominant-speaker target）→ 原话作为语气锚点 → 记忆层补充共同背景 → 人格层仅作兜底 → 用 ta 的方式输出`
+
+### 启动协议与对话持久化
+
+skill 每次被唤起都会先做三件事：加载最近 3 次 session 摘要、加载 corrections.md（用户过去确认过的纠正）、初始化轮次计数。这样 ta 不会每次"重新登场"都像变了个人。
+
+对话结束时（用户说"拜拜"/"下次聊"或累计 20 轮以上），skill 询问是否归档——同意后把本次对话压缩成摘要写入 `exes/{slug}/sessions/`，下次启动自动接回上下文。如果用户要求"把这次也存到记忆里"，摘要还会作为特殊 source 的 chunk 入 Milvus，供跨长时间的长期记忆检索（不会污染默认的语气查询）。
 
 ### 支持的标签
 

@@ -23,3 +23,4 @@ out/
 .env
 .env.local
 venv/
+.claude

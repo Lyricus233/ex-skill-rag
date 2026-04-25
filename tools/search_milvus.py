@@ -10,18 +10,24 @@ Usage:
         [--collection <name>] \
         [--source <wechat_weflow/qq/other>] \
         [--chat-id <chat_id>] \
+        [--dominant-speaker <me/target/other>] \
         [--json]
 """
 
 from __future__ import annotations
 
 import os
+import sys
 import json
 import argparse
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from openai import OpenAI
 from pymilvus import MilvusClient
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 def sanitize_text(text: str) -> str:
@@ -48,12 +54,18 @@ def embed_query(client: OpenAI, model: str, text: str) -> List[float]:
     return resp.data[0].embedding
 
 
-def build_filter(chat_id: str = None, source: str = None) -> str:
+def build_filter(
+    chat_id: str = None,
+    source: str = None,
+    dominant_speaker: str = None,
+) -> str:
     clauses: List[str] = []
     if source:
         clauses.append(f'source == "{source}"')
     if chat_id:
         clauses.append(f'chat_id == "{chat_id}"')
+    if dominant_speaker:
+        clauses.append(f'dominant_speaker == "{dominant_speaker}"')
     return " and ".join(clauses)
 
 
@@ -68,6 +80,12 @@ def parse_args() -> argparse.Namespace:
         "--source", default=None, help="可选，按来源过滤（wechat_weflow/qq/other）"
     )
     parser.add_argument("--chat-id", default=None, help="可选，指定 chat_id")
+    parser.add_argument(
+        "--dominant-speaker",
+        default=None,
+        choices=["me", "target", "other"],
+        help="可选，按主导说话人过滤（me=用户自己 / target=对方 / other）。运行 ex-skill 模仿语气时应设为 target",
+    )
     parser.add_argument("--json", action="store_true", help="以 JSON 格式输出")
     return parser.parse_args()
 
@@ -92,7 +110,7 @@ def main() -> None:
     )
 
     query_vector = embed_query(openai_client, model, args.query)
-    filter_expr = build_filter(args.chat_id, args.source)
+    filter_expr = build_filter(args.chat_id, args.source, args.dominant_speaker)
 
     search_kwargs = {
         "collection_name": collection,
